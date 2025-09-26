@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Imagem Viral (Gemini)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #e5e7eb;
+        }
+        .container {
+            max-width: 90%;
+            margin: 2rem auto;
+            padding: 2rem;
+        }
+        .image-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+            background-color: #161b22;
+            border: 2px dashed #30363d;
+            border-radius: 0.75rem;
+            margin-top: 1.5rem;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+        .generated-image {
+            /* Max width adaptável, mas permite que o 9:16 seja alto */
+            max-width: 95%; 
+            max-height: 85vh; 
+            border-radius: 0.5rem;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+            object-fit: contain;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .btn-generate {
+            background: linear-gradient(145deg, #ef4444, #dc2626);
+            transition: all 0.2s;
+        }
+        .btn-generate:hover {
+            background: linear-gradient(145deg, #f87171, #ef4444);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(239, 68, 68, 0.4);
+        }
+        select {
+            color: #e5e7eb; /* Garante que o texto dentro do select seja legível */
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 class="text-3xl font-bold mb-6 text-center text-red-400">Gerador de Imagem Viral de Futebol</h1>
+    <p class="text-center mb-6 text-gray-400">Modelos Gemini: <span class="font-mono text-sm bg-gray-700 px-2 py-1 rounded">Flash-Image</span> (Geração) | <span class="font-mono text-sm bg-gray-700 px-2 py-1 rounded">Flash-LLM</span> (Otimização)</p>
+
+    <!-- Seletor de Formato (Aspect Ratio) -->
+    <div class="mb-4">
+        <label for="aspectRatioSelect" class="block text-sm font-medium mb-2 text-gray-300">Selecione o Formato da Imagem:</label>
+        <select id="aspectRatioSelect" onchange="updatePromptTemplate()" class="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-sm focus:ring-red-500 focus:border-red-500 transition duration-150 shadow-inner">
+            <option value="9:16 (Vertical)" selected>9:16 (Vertical) - Reels / Shorts</option>
+            <option value="16:9 (Horizontal)">16:9 (Horizontal) - YouTube / Desktop</option>
+            <option value="1:1 (Quadrado)">1:1 (Quadrado) - Instagram Post</option>
+        </select>
+    </div>
+
+    <!-- Área de Input do Prompt e Otimizador Gemini -->
+    <div class="flex justify-between items-center mb-2">
+        <label for="promptInput" class="block text-sm font-medium text-gray-300">Prompt de Texto (Adaptado ao Formato Selecionado):</label>
+        <button id="optimizeBtn" onclick="optimizePrompt()" class="text-sm text-red-300 hover:text-red-400 font-semibold transition duration-150 p-1 rounded-md border border-red-800 bg-red-900/30">
+            ✨ Otimizar Prompt (Gemini LLM)
+        </button>
+    </div>
+    
+    <div class="mb-4">
+        <textarea id="promptInput" rows="12" class="w-full p-4 bg-gray-800 border border-gray-700 rounded-lg text-sm focus:ring-red-500 focus:border-red-500 transition duration-150 shadow-inner" placeholder="Insira seu prompt detalhado aqui..."></textarea>
+    </div>
+
+    <!-- Botão de Geração -->
+    <div class="flex justify-center mb-8">
+        <button id="generateBtn" onclick="generateImage()" class="btn-generate text-white font-extrabold py-3 px-8 rounded-full shadow-lg hover:shadow-xl transition duration-300 ease-in-out">
+            Gerar Imagem Viral (Gemini Flash)
+        </button>
+    </div>
+
+    <!-- Área de Resultado e Feedback -->
+    <div id="resultContainer" class="image-container flex flex-col p-4">
+        <p id="statusMessage" class="text-gray-400">A imagem gerada aparecerá aqui. Pressione "Gerar Imagem Viral" para começar.</p>
+    </div>
+
+</div>
+
+<script>
+    // Variáveis globais para configuração (preenchidas pelo ambiente)
+    const apiKey = ""; 
+    const IMAGE_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key="; 
+    const LLM_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=";
+
+    // Base do prompt, sem a informação do formato (que será injetada dinamicamente)
+    const CORE_PROMPT = `(montagem conceitual em colagem/fusão), Estilo Cinemático Hyper-realista, Alto Contraste e Cores Saturadas (Vermelho e Verde vibrantes).
+
+A composição deve fundir os seguintes quatro momentos explosivos do futebol em uma sequência intensa com Iluminação Dramática e Grão de Filme (Film Grain) leve, utilizando transições visuais agressivas simuladas (Flash, Stutter Edit, Glitch e Light Leaks):
+
+1. Foco Principal (Cena 1): Close-up instável (shaky cam) de uma bola de futebol envolta em chamas, com a torcida massiva e embaçada no fundo. As Luzes do Estádio Ofuscantes criam um efeito de halo intenso.
+
+2. Transição Rápida (Cena 2): Fusão com o impacto de uma bola na rede em Super Slow-Motion, capturando a pulverização dramática de água do gramado. Foco nítido no momento exato do impacto e na tensão da rede.
+
+3. Vibração em Massa (Cena 3): Corte estroboscópico para uma celebração de torcida massiva, capturada em um drone shot subindo que revela um mar de sinalizadores acesos e bandeiras balançando freneticamente no campo iluminado.
+
+4. Clímax (Cena 4): A cena se afasta rapidamente (efeito whoosh) para focar em uma Taça Dourada sendo levantada contra o céu noturno, com um Brilho Intenso (Intense Lens Flare) e reflexos dourados dramáticos no objeto.
+
+Overlay de Texto (Obrigatório): Inclua o texto 'WRTVBr O Canal do Esporte' em fonte branca neon brilhante, fixo e centralizado na parte inferior de toda a composição.
+
+Estilo Adicional: Wide Angle Lens, Profundidade de Campo Rasa, Ação Congelada e Explosiva.
+`;
+
+    /**
+     * Atualiza o conteúdo do textarea do prompt com o formato selecionado.
+     */
+    function updatePromptTemplate() {
+        const select = document.getElementById('aspectRatioSelect');
+        const promptInput = document.getElementById('promptInput');
+        const selectedValue = select.value;
+        
+        // Define o prefixo do formato (ex: Imagem única, Formato 9:16 (Vertical),)
+        const formatPrefix = `Imagem única, Formato ${selectedValue}, `;
+        
+        // Concatena e atualiza o prompt
+        promptInput.value = formatPrefix + CORE_PROMPT.trim();
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Define o prompt inicial usando o default (9:16) na inicialização
+        updatePromptTemplate();
+    });
+
+    /**
+     * Função auxiliar para fazer chamadas fetch com backoff exponencial
+     * @param {string} url O URL da API
+     * @param {object} options As opções do fetch (método, headers, body)
+     * @param {number} maxRetries O número máximo de tentativas
+     * @param {number} delay O atraso inicial em milissegundos
+     * @returns {Promise<Response>} A resposta do fetch
+     */
+    async function fetchWithExponentialBackoff(url, options, maxRetries = 5, delay = 1000) {
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const response = await fetch(url, options);
+                if (response.status !== 429) { // Não é erro de taxa limite
+                    return response;
+                }
+                console.warn(`Tentativa ${i + 1} falhou com 429. Reagendando em ${delay}ms...`);
+            } catch (error) {
+                // Erros de rede/conexão também devem ser tratados
+                console.error(`Erro na Tentativa ${i + 1}:`, error);
+            }
+            if (i < maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // Duplica o atraso
+            }
+        }
+        throw new Error("Falha na chamada da API após múltiplas tentativas.");
+    }
+    
+    /**
+     * Otimiza o prompt de texto atual usando o modelo Gemini LLM (gemini-2.5-flash-preview-05-20).
+     */
+    async function optimizePrompt() {
+        const promptInput = document.getElementById('promptInput');
+        const optimizeBtn = document.getElementById('optimizeBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const currentPrompt = promptInput.value.trim();
+
+        if (!currentPrompt) {
+            statusMessage.textContent = "Insira algum texto no prompt para otimização.";
+            return;
+        }
+
+        optimizeBtn.disabled = true;
+        optimizeBtn.textContent = '✨ Otimizando...';
+        statusMessage.textContent = "Solicitando ao Gemini para refinar e detalhar o seu prompt...";
+        
+        // Instrução para o LLM
+        const userQuery = `Reescreva e aprimore o seguinte prompt para um gerador de imagens de IA (como Midjourney ou DALL-E). O objetivo é maximizar o impacto visual, detalhe, e aderência ao estilo cinematográfico, hiper-realista e de alta energia. Mantenha o conteúdo das 4 cenas, as transições e o texto 'WRTVBr O Canal do Esporte', mas adicione mais adjetivos técnicos de iluminação, composição e estilo para torná-lo mais eficaz. O formato da imagem deve ser mantido conforme a instrução no prompt original. Prompt para aprimoramento: 
+        
+        ---
+        ${currentPrompt}
+        ---
+        
+        Retorne **apenas** o texto do prompt aprimorado, sem introduções, títulos ou explicações.`;
+
+        try {
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: "You are a world-class prompt engineer specializing in hyper-realistic, cinematic, and high-energy sports visual generation for AI models. Your goal is to maximize the visual quality of the input prompt." }]
+                },
+            };
+
+            const fullUrl = LLM_API_URL + apiKey;
+
+            const response = await fetchWithExponentialBackoff(fullUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            const refinedText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+            if (refinedText) {
+                promptInput.value = refinedText;
+                statusMessage.textContent = "✨ Prompt otimizado com sucesso pelo Gemini! Gere a imagem para ver o resultado.";
+            } else {
+                statusMessage.textContent = "Erro ao receber o texto otimizado do Gemini.";
+                console.error("LLM Refinement Error:", result);
+            }
+
+        } catch (error) {
+            statusMessage.textContent = `Erro durante a otimização do prompt: ${error.message}`;
+            console.error("Optimization API Error:", error);
+        } finally {
+            optimizeBtn.disabled = false;
+            optimizeBtn.textContent = '✨ Otimizar Prompt (Gemini LLM)';
+        }
+    }
+
+    async function generateImage() {
+        const promptInput = document.getElementById('promptInput');
+        const statusMessage = document.getElementById('statusMessage');
+        const resultContainer = document.getElementById('resultContainer');
+        const generateBtn = document.getElementById('generateBtn');
+        const aspectRatioSelect = document.getElementById('aspectRatioSelect');
+
+        const userPrompt = promptInput.value.trim();
+        
+        if (!userPrompt) {
+            statusMessage.textContent = "Por favor, insira um prompt de texto.";
+            return;
+        }
+
+        // 1. Obter o formato selecionado para a Instrução do Sistema
+        const selectedAspectRatioFull = aspectRatioSelect.value; // Ex: '9:16 (Vertical)'
+        const ratioText = selectedAspectRatioFull.split(' ')[0]; // Ex: '9:16'
+        const orientation = selectedAspectRatioFull.includes('Vertical') ? 'vertical' : selectedAspectRatioFull.includes('Horizontal') ? 'horizontal' : 'square';
+
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Gerando Imagem... (Aguarde)';
+        resultContainer.innerHTML = '<div class="loading-spinner"></div>';
+        resultContainer.classList.add('justify-center', 'items-center');
+        statusMessage.textContent = `Processando a sua imagem de alta energia no formato ${ratioText}...`;
+
+        try {
+            // 2. Criar a instrução do sistema dinâmica
+            const systemInstructionText = `You are an expert AI image generator focused on creating a ${ratioText} (${orientation}) cinematic, high-energy sports montage with intense lighting and hyper-realistic detail. The output must strictly be ${ratioText} aspect ratio.`;
+
+            const payload = {
+                contents: [{
+                    parts: [{ text: userPrompt }]
+                }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE']
+                },
+                systemInstruction: {
+                    parts: [{ text: systemInstructionText }]
+                },
+            };
+
+            const fullUrl = IMAGE_API_URL + apiKey;
+
+            const response = await fetchWithExponentialBackoff(fullUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            
+            const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+            
+            if (base64Data) {
+                const imageUrl = `data:image/png;base64,${base64Data}`;
+                
+                resultContainer.innerHTML = '';
+                const imgElement = document.createElement('img');
+                imgElement.src = imageUrl;
+                imgElement.alt = "Imagem Viral de Futebol Gerada";
+                
+                // 3. Adaptar a classe CSS para melhor visualização do formato
+                let imageClass = 'generated-image';
+                if (ratioText === '9:16') {
+                    imageClass += ' max-w-sm'; // Limita a largura para vertical
+                } else if (ratioText === '16:9') {
+                    imageClass += ' w-full max-h-96'; // Ocupa a largura máxima disponível
+                } else { // 1:1
+                    imageClass += ' max-w-lg'; // Tenta um tamanho maior para quadrado
+                }
+
+                imgElement.className = imageClass;
+
+                imgElement.onload = () => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'flex flex-col items-center justify-center h-full w-full';
+                    wrapper.appendChild(imgElement);
+                    resultContainer.appendChild(wrapper);
+                    statusMessage.textContent = "Imagem gerada com sucesso! Formato: " + selectedAspectRatioFull;
+                };
+            } else {
+                let errorMessage = "Erro ao gerar imagem. Nenhuma imagem foi retornada. Verifique se o prompt não viola as diretrizes.";
+                if (result.error && result.error.message) {
+                    errorMessage = `Erro da API: ${result.error.message}`;
+                }
+                resultContainer.innerHTML = `<p class="text-red-500 text-center p-4">${errorMessage}</p>`;
+                statusMessage.textContent = "Falha na Geração.";
+                console.error("API Response Error:", result);
+            }
+
+        } catch (error) {
+            resultContainer.innerHTML = `<p class="text-red-500 text-center p-4">Erro de conexão ou timeout: ${error.message}</p>`;
+            statusMessage.textContent = "Falha na Geração.";
+            console.error("General Error:", error);
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Gerar Imagem Viral (Gemini Flash)';
+            resultContainer.classList.remove('justify-center', 'items-center');
+            resultContainer.appendChild(statusMessage);
+        }
+    }
+</script>
+
+</body>
+</html>
